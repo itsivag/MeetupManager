@@ -1,10 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import Credentials from "next-auth/providers/credentials";
 import { prisma, prismaUnfiltered } from "./prisma";
-
-// For demo/testing - allow any credentials
-const DEMO_MODE = true;
 
 // Validate required environment variables
 function validateEnv() {
@@ -18,9 +14,9 @@ function validateEnv() {
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
-    console.warn(
-      `⚠️ Missing environment variables: ${missing.join(", ")}\n` +
-      "Demo mode enabled - using mock authentication"
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}\n` +
+      "Please check your .env file and ensure all required variables are set."
     );
   }
 
@@ -44,49 +40,19 @@ validateEnv();
 
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL?.toLowerCase();
 
-// Create providers array
-const providers: any[] = [
-  Google({
-    clientId: process.env.AUTH_GOOGLE_ID || "mock-google-id",
-    clientSecret: process.env.AUTH_GOOGLE_SECRET || "mock-google-secret",
-  }),
-];
-
-// Add credentials provider for demo mode
-if (DEMO_MODE) {
-  providers.push(
-    Credentials({
-      name: "Demo Account",
-      credentials: {
-        email: { label: "Email", type: "email", placeholder: "demo@example.com" },
-      },
-      async authorize(credentials) {
-        // Always allow login in demo mode
-        const email = credentials?.email || "demo@example.com";
-        return {
-          id: "demo-user-1",
-          name: "Demo User",
-          email: email,
-          image: null,
-        };
-      },
-    })
-  );
-}
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers,
+  providers: [
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID!,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
+    }),
+  ],
   session: { 
     strategy: "jwt",
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Always allow in demo mode for credentials provider
-      if (account?.provider === "credentials") {
-        return true;
-      }
-
+    async signIn({ user }) {
       const email = user.email?.toLowerCase();
       if (!email) return false;
 
@@ -115,16 +81,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       return !!volunteerRecord;
     },
-    async jwt({ token, user, trigger, account }) {
-      // Handle demo credentials login
-      if (account?.provider === "credentials") {
-        token.id = user.id || "demo-user-1";
-        token.globalRole = "SUPER_ADMIN";
-        token.name = user.name || "Demo User";
-        token.email = user.email || "demo@example.com";
-        return token;
-      }
-
+    async jwt({ token, user, trigger }) {
       const email = user?.email?.toLowerCase() ?? (token.email as string | undefined)?.toLowerCase();
 
       if (email) {
