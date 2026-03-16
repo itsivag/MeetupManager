@@ -33,6 +33,15 @@ http://localhost:3000/api
 
 Meetup Manager supports **dual authentication** - Google OAuth for web users and token-based auth for programmatic/API access.
 
+### Cookie Names by Environment
+
+| Environment | Protocol | Cookie Name |
+|-------------|----------|-------------|
+| Local Development | HTTP | `authjs.session-token` |
+| Production (Vercel) | HTTPS | `__Secure-authjs.session-token` |
+
+> **Important:** Production deployments on Vercel/HTTPS use the `__Secure-` prefix. Always check both names if authentication fails.
+
 ### For AI Agents: Getting an Access Token
 
 Since AI agents cannot complete interactive Google OAuth flows, you have **three options**:
@@ -82,22 +91,26 @@ This is the **most common method** when the user is already signed in via browse
 
 1. Open browser DevTools (F12)
 2. Go to Application/Storage → Cookies → `localhost` (or your domain)
-3. Find the session cookie:
-   - **Development:** `authjs.session-token`
-   - **Production:** `__Secure-authjs.session-token`
+3. Find the session cookie (see table above for correct name based on environment)
 4. Copy the cookie value - this IS your session key
-5. Use it as a Bearer token in API calls:
+5. Use it in API calls via **Cookie header** (recommended for production):
 
 ```http
-Authorization: Bearer <session-cookie-value>
+GET /api/dashboard
+Cookie: __Secure-authjs.session-token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2...
 ```
 
-**Example cookie name:** `authjs.session-token`  
-**Example cookie value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+Or via **Authorization Bearer** (also works):
+```http
+Authorization: Bearer eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2...
+```
+
+**Example cookie name:** `__Secure-authjs.session-token` (production)  
+**Example cookie value:** `eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoi...`
 
 **Session Duration:** 7 days (expires automatically after 604800 seconds)
 
-> **Note:** The cookie value is a valid JWT token. Pass it directly as the Bearer token - no conversion needed.
+> **Note:** The cookie value is an encrypted JWT token. Pass it directly without decoding or modification.
 
 #### Option 3: User Provides Token
 
@@ -131,6 +144,46 @@ Response:
 ### Web (Cookie-based)
 
 For browser-based clients, Google OAuth sets session cookies automatically. No additional configuration needed.
+
+---
+
+## Troubleshooting Authentication
+
+### Common 401 Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `401 Unauthorized` | Wrong cookie name | Use `__Secure-authjs.session-token` for HTTPS/production, `authjs.session-token` for local HTTP |
+| `401 Unauthorized` | Token expired | Session expired after 7 days. Get new token from browser or use refresh token |
+| `401 Unauthorized` | Modified token | Don't decode or modify the cookie value. Use it exactly as copied |
+| `401 Unauthorized` | Wrong header format | Use `Cookie: __Secure-authjs.session-token=...` or `Authorization: Bearer ...` |
+| `403 Forbidden` | Insufficient role | Check your role vs required role for the action |
+
+### Testing Your Token
+
+Quick test to verify your token works:
+```http
+GET /api/dashboard
+Cookie: __Secure-authjs.session-token={your-token}
+```
+
+Expected: `200 OK` with user data  
+If `401`: Token is invalid or expired
+
+### Token Format Reference
+
+**Valid production token example:**
+```
+eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoi...}
+```
+- Starts with `eyJ` (base64 encoded JSON)
+- Contains multiple `.` separators
+- Long string (200+ characters)
+
+**Invalid token examples:**
+- `undefined` - Cookie not found
+- `[object Object]` - Accidentally stringified object
+- Short string (< 50 chars) - Wrong cookie copied
 
 ## Role-Based Access Control
 
@@ -185,9 +238,84 @@ For browser-based clients, Google OAuth sets session cookies automatically. No a
 5. **Member deletion is a soft-delete** — the account is deactivated but data is preserved; any owned events or entities must be reassigned first
 6. **Event Leads can view SOP templates** but only Admins+ can create, edit, or delete them
 
+## Pagination
+
+List endpoints support pagination via query parameters:
+
+```http
+GET /api/events?page=1&limit=20
+GET /api/audit-log?page=1&limit=50
+GET /api/email/log?page=1&limit=100&template=event-created
+```
+
+**Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 50, max: 100)
+
+**Response includes pagination metadata:**
+```json
+{
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 234,
+    "totalPages": 5
+  }
+}
+```
+
+## Rate Limiting
+
+| Endpoint Type | Limit | Window |
+|--------------|-------|--------|
+| Standard API | 100 requests | 1 minute |
+| Auth endpoints | 10 requests | 1 minute |
+| Burst capacity | 20 requests | - |
+
+**Response Headers:**
+- `X-RateLimit-Limit`: Maximum requests allowed
+- `X-RateLimit-Remaining`: Requests remaining in window
+- `X-RateLimit-Reset`: Unix timestamp when limit resets
+
+**When rate limited (429):**
+```json
+{
+  "error": "Too Many Requests",
+  "retryAfter": 30
+}
+```
+
+## Date/Time Handling
+
+- **All API dates are in UTC** (ISO 8601 format)
+- **Format:** `2026-03-21T03:30:00.000Z`
+- **Timezone:** Always UTC, convert to local for display
+
+**JavaScript example:**
+```javascript
+// Parse UTC date from API
+const eventDate = new Date('2026-03-21T03:30:00.000Z');
+
+// Convert to local timezone
+const localDate = eventDate.toLocaleString();
+// "3/20/2026, 8:30:00 PM" (PST example)
+```
+
+**Creating dates:**
+```javascript
+// Create UTC date for API
+const date = new Date('2026-04-15T18:00:00.000Z').toISOString();
+// "2026-04-15T18:00:00.000Z"
+```
+
 ## Core Resources
 
-> **Remember:** All API calls below require the session key in the Authorization header:
+> **Remember:** All API calls below require the session key in the Cookie or Authorization header:
+> ```http
+> Cookie: __Secure-authjs.session-token={your-session-key}
+> ```
+> Or:
 > ```http
 > Authorization: Bearer {your-session-key}
 > ```
@@ -1102,6 +1230,120 @@ const report = {
 };
 ```
 
+### Quick Workflows
+
+#### Create Event + Add Speaker + Assign Tasks
+```javascript
+// Step 1: Create event with template
+const event = await api.createEvent({
+  title: 'React Workshop',
+  date: '2026-04-20T18:00:00.000Z',
+  endDate: '2026-04-20T21:00:00.000Z',
+  venue: 'Tech Hub',
+  templateId: 'tmpl_default'
+});
+
+// Step 2: Create speaker
+const speaker = await api.request('/speakers', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: 'Sarah Chen',
+    email: 'sarah@example.com',
+    topic: 'React Performance'
+  })
+});
+
+// Step 3: Link speaker to event
+await api.request(`/events/${event.id}/speakers`, {
+  method: 'POST',
+  body: JSON.stringify({
+    speakerId: speaker.id,
+    status: 'INVITED'
+  })
+});
+
+// Step 4: Assign tasks
+const task = event.checklists[0].tasks[0];
+await api.request(`/checklists/${event.checklists[0].id}/tasks/${task.id}`, {
+  method: 'PATCH',
+  body: JSON.stringify({
+    assigneeId: 'usr_...',
+    deadline: '2026-04-15T12:00:00.000Z'
+  })
+});
+```
+
+#### Complete Overdue Tasks
+```javascript
+// Get dashboard to find overdue tasks
+const dashboard = await api.getDashboard();
+
+// Mark each overdue task as done
+for (const task of dashboard.overdueTasks) {
+  await api.request(`/checklists/${task.checklistId}/tasks/${task.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'DONE' })
+  });
+}
+```
+
+#### List Events with Pagination
+```javascript
+// Get first page
+const page1 = await api.request('/events?page=1&limit=20');
+
+// Get next page if more exist
+if (page1.pagination.page < page1.pagination.totalPages) {
+  const page2 = await api.request('/events?page=2&limit=20');
+}
+```
+
+---
+
+## Quick Reference: Permissions
+
+### Minimum Role Required by Action
+
+| Action | API Endpoint | Minimum Role |
+|--------|--------------|--------------|
+| **Events** |
+| View events | `GET /api/events` | VIEWER (own), EVENT_LEAD (all) |
+| Create event | `POST /api/events` | EVENT_LEAD |
+| Update event | `PATCH /api/events/{id}` | ORGANIZER (event), ADMIN (any) |
+| Delete event | `DELETE /api/events/{id}` | LEAD (own), SUPER_ADMIN (any) |
+| **Speakers** |
+| View speakers | `GET /api/speakers` | EVENT_LEAD |
+| Create speaker | `POST /api/speakers` | EVENT_LEAD |
+| Link to event | `POST /api/events/{id}/speakers` | EVENT_LEAD |
+| **Volunteers** |
+| View volunteers | `GET /api/volunteers` | EVENT_LEAD |
+| Create volunteer | `POST /api/volunteers` | EVENT_LEAD |
+| Promote to member | `POST /api/volunteers/{id}/convert` | ADMIN |
+| **Members** |
+| View members | `GET /api/members/list` | ADMIN |
+| Add member | `POST /api/members` | ADMIN |
+| Change role | `PATCH /api/members/{id}` | ADMIN (up to EVENT_LEAD), SUPER_ADMIN (any) |
+| Delete member | `DELETE /api/members/{id}` | SUPER_ADMIN |
+| **Templates** |
+| View templates | `GET /api/templates` | EVENT_LEAD |
+| Create template | `POST /api/templates` | ADMIN |
+| **Settings** |
+| View settings | `GET /api/settings` | SUPER_ADMIN |
+| Update settings | `PATCH /api/settings` | SUPER_ADMIN |
+
+### Role Hierarchy Quick Check
+```javascript
+const ROLE_LEVEL = { VIEWER: 0, VOLUNTEER: 1, EVENT_LEAD: 2, ADMIN: 3, SUPER_ADMIN: 4 };
+
+function canPerform(userRole, requiredRole) {
+  return ROLE_LEVEL[userRole] >= ROLE_LEVEL[requiredRole];
+}
+
+// Examples:
+canPerform('ADMIN', 'EVENT_LEAD'); // true - Admin can do Event Lead actions
+canPerform('EVENT_LEAD', 'ADMIN'); // false - Event Lead cannot do Admin actions
+```
+
 ---
 
 ## Error Handling
@@ -1145,32 +1387,103 @@ const report = {
 
 When building AI agents, use these patterns:
 
-### Type-Safe API Client
+### Type-Safe API Client with Error Handling
 
 ```typescript
 class MeetupManagerAPI {
-  constructor(private baseUrl: string, private token?: string) {}
+  constructor(
+    private baseUrl: string, 
+    private token?: string,
+    private isProduction: boolean = true
+  ) {}
+  
+  private getAuthHeader(): Record<string, string> {
+    if (!this.token) return {};
+    
+    // Production: Use Cookie header (more reliable)
+    if (this.isProduction) {
+      return {
+        'Cookie': `__Secure-authjs.session-token=${this.token}`
+      };
+    }
+    
+    // Local development: Bearer token works
+    return {
+      'Authorization': `Bearer ${this.token}`
+    };
+  }
   
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const res = await fetch(`${this.baseUrl}/api${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+        ...this.getAuthHeader(),
         ...options?.headers
       }
     });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+    
+    // Handle specific error codes
+    if (res.status === 401) {
+      throw new Error('Session expired or invalid. Please provide a new session token.');
+    }
+    if (res.status === 403) {
+      throw new Error('Permission denied. Your role does not have access to this resource.');
+    }
+    if (res.status === 409) {
+      const data = await res.json();
+      throw new Error(`Conflict: ${data.error || 'Resource already exists'}`);
+    }
+    if (res.status === 422) {
+      const data = await res.json();
+      throw new Error(`Validation failed: ${JSON.stringify(data.details || data.error)}`);
+    }
+    if (res.status === 429) {
+      throw new Error('Rate limit exceeded. Please wait before retrying.');
+    }
+    if (!res.ok) {
+      throw new Error(`API Error ${res.status}: ${res.statusText}`);
+    }
+    
     return res.json();
+  }
+  
+  // Test if token is valid
+  async verifyToken(): Promise<boolean> {
+    try {
+      await this.request('/dashboard');
+      return true;
+    } catch {
+      return false;
+    }
   }
   
   // Events
   listEvents = (filter?: string) => this.request(`/events${filter ? `?filter=${filter}` : ''}`);
   getEvent = (id: string) => this.request(`/events/${id}`);
   createEvent = (data: any) => this.request('/events', { method: 'POST', body: JSON.stringify(data) });
+  updateEvent = (id: string, data: any) => this.request(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  deleteEvent = (id: string) => this.request(`/events/${id}`, { method: 'DELETE' });
+  
+  // Dashboard
+  getDashboard = () => this.request('/dashboard');
   
   // ... other methods
 }
+
+// Usage example:
+const api = new MeetupManagerAPI('https://kugmanager.vercel.app', userToken, true);
+
+// Verify token before operations
+const isValid = await api.verifyToken();
+if (!isValid) {
+  console.error('Please sign in again and provide a new session token');
+  return;
+}
+
+// Now make API calls
+const dashboard = await api.getDashboard();
+const events = await api.listEvents('upcoming');
 ```
 
 ### Batch Operations
@@ -1352,12 +1665,19 @@ return dashboard.myTasks.map(t =>
 
 | Scenario | Agent Response |
 |----------|----------------|
-| `401 Unauthorized` | "I need your session key to access Meetup Manager. Please provide your session cookie (authjs.session-token) from the browser, or sign in first. Note: Sessions expire after 7 days." |
+| `401 Unauthorized` | "I need your session key to access Meetup Manager. Please provide your session cookie (authjs.session-token for local, __Secure-authjs.session-token for production) from the browser, or sign in first. Note: Sessions expire after 7 days." |
 | `403 Forbidden` | "You don't have permission to do this. Your role is X, but you need Y." |
 | `409 Conflict` | "There's a conflict - perhaps this email already exists or there's a duplicate entry." |
+| `422 Unprocessable Entity` | "The data you provided is invalid. Check required fields and formats." |
+| `429 Too Many Requests` | "Rate limit exceeded. Please wait a moment before trying again." |
+| `500 Internal Server Error` | "Server error. Please try again in a few moments." |
 | User not registered | "You need to sign into Meetup Manager via Google first before I can access the API on your behalf." |
 
-**If you get 401 on EVERY request:** You forgot to include the Authorization header. Make sure EVERY API call includes:
+**If you get 401 on EVERY request:** You forgot to include the Authorization/Cookie header. Make sure EVERY API call includes:
+```http
+Cookie: __Secure-authjs.session-token={session-key}
+```
+Or:
 ```http
 Authorization: Bearer {session-key}
 ```
