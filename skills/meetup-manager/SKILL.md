@@ -120,8 +120,6 @@ For browser-based clients, Google OAuth sets session cookies automatically. No a
 
 ## Role-Based Access Control
 
-> **UI Reference:** Visit `/settings/permissions` in the Meetup Manager dashboard for a visual permission matrix and detailed role descriptions.
-
 ### Global Roles (Hierarchy)
 | Role | Level | Capabilities |
 |------|-------|--------------|
@@ -139,29 +137,39 @@ For browser-based clients, Google OAuth sets session cookies automatically. No a
 | `ORGANIZER` | 2 | Create/update within event |
 | `LEAD` | 3 | Full event control including delete |
 
-### Permission Matrix Reference
+### Permission Matrix
 
-For a complete visual permission matrix showing which roles can access which features, visit:
-```
-https://your-domain.com/settings/permissions
-```
+| Feature | VIEWER | VOLUNTEER | EVENT_LEAD | ADMIN | SUPER_ADMIN |
+|---------|--------|-----------|------------|-------|-------------|
+| Dashboard | full | limited (scoped) | full | full | full |
+| View Events | full | limited (assigned only) | full | full | full |
+| Create Events | none | none | full | full | full |
+| Edit/Delete Events | none | none | limited | limited | full |
+| Speakers | none | none | full | full | full |
+| Venue Partners | none | none | full | full | full |
+| Volunteers | none | none | full | full | full |
+| Promote Volunteer → Member | none | none | none | full | full |
+| SOP Tasks (own) | none | limited | full | full | full |
+| SOP Templates | none | none | view only | full | full |
+| Change Event Template | none | none | none | full | full |
+| Members Management | none | none | none | limited | full |
+| Audit Log | none | none | none | full | full |
+| Email & Test Email | none | none | none | full | full |
+| Public Code of Conduct (View) | full | full | full | full | full |
+| Public Code of Conduct (Edit) | none | none | none | none | full |
+| Discord Integration | none | none | none | full | full |
+| App Settings | none | none | none | none | full |
 
-The matrix includes:
-- Dashboard access levels (full/limited/none)
-- Event management permissions
-- Speaker/Volunteer/Venue management
-- SOP Tasks and Templates
-- Member management
-- Audit logs, Email, Discord integrations
-- App Settings access
+**Access levels:** `full` = complete access, `limited` = restricted access, `none` = no access
 
 ### Key Rules
 
 1. **Admins and Super Admins bypass all event-level role checks** — they have full access to every event
 2. **Only Super Admins can assign the Admin role, delete members, or change app-wide settings**
-3. **Admins cannot modify other Admins** — role changes between Admins require Super Admin
-4. **Volunteers can only see events they're assigned to**, and can only manage their own tasks
-5. **Member deletion is a soft-delete** — account is deactivated but data is preserved; owned entities must be reassigned first
+3. **Admins cannot modify other Admins** — role changes between Admins require Super Admin intervention
+4. **Volunteers can only see events they're assigned to**, and can only manage their own tasks (toggle status, self-assign)
+5. **Member deletion is a soft-delete** — the account is deactivated but data is preserved; any owned events or entities must be reassigned first
+6. **Event Leads can view SOP templates** but only Admins+ can create, edit, or delete them
 
 ## Core Resources
 
@@ -895,8 +903,6 @@ Sends a test message to verify bot connectivity.
 
 ### Email System
 
-> **UI Reference:** Visit `/settings/permissions/email-workflows` for a visual reference of all automated email workflows with triggers, recipients, and timing.
-
 #### Send Test Email
 ```http
 POST /api/email/test
@@ -909,6 +915,29 @@ Content-Type: application/json
 ```
 
 Available templates: `member-invitation`, `volunteer-welcome`, `volunteer-promotion`, `event-created`, `event-reminder`, `task-assigned`, `task-due-soon`, `task-overdue`, `speaker-invitation`, `venue-confirmed`, `weekly-digest`
+
+#### Email Workflows Reference
+
+| # | Workflow | Trigger | Recipients | Subject |
+|---|----------|---------|------------|---------|
+| 1 | **Member Invitation** | Admin invites new member | Invited email | "You've been invited to join {Group Name}" |
+| 2 | **Volunteer Welcome** | Volunteer added with email | Volunteer's email | "Welcome to {Group Name} as a volunteer" |
+| 3 | **Volunteer Promotion** | Volunteer promoted to Member | Volunteer's email | "You've been promoted to Member in {Group Name}" |
+| 4 | **Event Created** | Event created or status → SCHEDULED | All Members, Admins, Super Admins + event members | "New Event: {Event Title}" |
+| 5 | **Event Reminder** | 2 days before event (cron) | Event team + confirmed speakers | "Reminder: {Event Title} in 2 days" |
+| 6 | **Task Assigned** | Task assigned / reassigned | Assigned user | "New Task Assigned: {Task Title}" |
+| 7 | **Task Due Soon** | Task deadline within 3 days (cron) | Assigned user | "Task Due Soon: {Task Title}" |
+| 8 | **Task Overdue** | Task past deadline (cron) | Assigned user (CC: Event Lead if 3+ days overdue) | "Task Overdue: {Task Title}" |
+| 9 | **Speaker Invitation** | Speaker added to event | Speaker's email | "Speaking Opportunity: {Event Title}" |
+| 10 | **Venue Confirmed** | Venue status → CONFIRMED | Event Lead | "Venue Confirmed: {Venue Name} for {Event Title}" |
+| 11 | **Weekly Digest** | Every Monday 09:00 UTC (cron) | All active members | "Weekly Digest: {Group Name}" |
+
+**Features:**
+- All emails include branded HTML templates with group logo (if uploaded)
+- Event reminder emails include `.ics` calendar attachments
+- Email delivery is tracked in `EmailLog` table with status (PENDING/SENT/FAILED)
+- Emails are sent fire-and-forget (don't block API responses)
+- Failures are logged but don't affect user-facing operations
 
 #### Get Email Logs
 ```http
