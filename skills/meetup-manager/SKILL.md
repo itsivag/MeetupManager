@@ -341,21 +341,12 @@ Content-Type: application/json
 Status options: `INVITED`, `CONFIRMED`, `DECLINED`, `CANCELLED`
 Priority options: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
 
-#### Update Event Speaker
-```http
-PATCH /api/events/{eventId}/speakers/{linkId}
-Content-Type: application/json
-
-{
-  "status": "CONFIRMED",
-  "notes": "Confirmed, needs projector"
-}
-```
-
 #### Remove Speaker from Event
 ```http
-DELETE /api/events/{eventId}/speakers/{linkId}
+DELETE /api/events/{eventId}/speakers?speakerId={speakerId}
 ```
+
+> **Note:** To update speaker status (INVITED → CONFIRMED, etc.), modify the Speaker entity directly via `PATCH /api/speakers/{id}`.
 
 ---
 
@@ -430,21 +421,12 @@ Content-Type: application/json
 
 Status options: `PENDING`, `CONFIRMED`, `ACTIVE`, `NO_SHOW`
 
-#### Update Event Volunteer
-```http
-PATCH /api/events/{eventId}/volunteers/{linkId}
-Content-Type: application/json
-
-{
-  "status": "ACTIVE",
-  "assignedRole": "Stage Manager"
-}
-```
-
 #### Remove Volunteer from Event
 ```http
-DELETE /api/events/{eventId}/volunteers/{linkId}
+DELETE /api/events/{eventId}/volunteers?volunteerId={volunteerId}
 ```
+
+> **Note:** To update volunteer status or assigned role, modify the Volunteer entity directly via `PATCH /api/volunteers/{id}`.
 
 ---
 
@@ -1360,3 +1342,331 @@ return dashboard.myTasks.map(t =>
 3. **Log actions** you perform on behalf of users for audit purposes
 4. **Respect role boundaries** - don't try to bypass permission checks
 5. **Refresh tokens securely** - don't expose them in logs or error messages
+
+
+---
+
+## Appendix: Enums & Constants Reference
+
+### GlobalRole
+| Value | Level | Description |
+|-------|-------|-------------|
+| `VIEWER` | 0 | Read-only access |
+| `VOLUNTEER` | 1 | Read events, manage own tasks |
+| `EVENT_LEAD` | 2 | Create/manage events, speakers, volunteers |
+| `ADMIN` | 3 | Full access except admin management |
+| `SUPER_ADMIN` | 4 | Complete control |
+
+### EventRole
+| Value | Level | Description |
+|-------|-------|-------------|
+| `VIEWER` | 0 | Read event data |
+| `VOLUNTEER` | 1 | Read event data |
+| `ORGANIZER` | 2 | Create/update within event |
+| `LEAD` | 3 | Full event control |
+
+### EventStatus
+| Value | Description |
+|-------|-------------|
+| `DRAFT` | Initial state, not publicly visible |
+| `SCHEDULED` | Confirmed date, visible to team |
+| `LIVE` | Currently happening |
+| `COMPLETED` | Event finished |
+
+### SpeakerStatus
+| Value | Description |
+|-------|-------------|
+| `INVITED` | Initial invitation sent |
+| `CONFIRMED` | Speaker confirmed attendance |
+| `DECLINED` | Speaker declined invitation |
+| `CANCELLED` | Previously confirmed but cancelled |
+
+### VolunteerStatus
+| Value | Description |
+|-------|-------------|
+| `PENDING` | Awaiting confirmation |
+| `CONFIRMED` | Confirmed for event |
+| `ACTIVE` | Currently participating |
+| `NO_SHOW` | Confirmed but didn't attend |
+
+### VenuePartnerStatus
+| Value | Description |
+|-------|-------------|
+| `INQUIRY` | Initial inquiry sent |
+| `PENDING` | Awaiting response |
+| `CONFIRMED` | Venue booked |
+| `DECLINED` | Venue unavailable |
+| `CANCELLED` | Previously confirmed but cancelled |
+
+### TaskStatus
+| Value | Description |
+|-------|-------------|
+| `TODO` | Not started |
+| `IN_PROGRESS` | Currently working on it |
+| `BLOCKED` | Blocked, needs resolution |
+| `DONE` | Completed |
+
+### Priority
+| Value | Level | Description |
+|-------|-------|-------------|
+| `LOW` | 0 | Can be deferred |
+| `MEDIUM` | 1 | Standard priority |
+| `HIGH` | 2 | Urgent attention needed |
+| `CRITICAL` | 3 | Blocker for event success |
+
+### SOPSection
+| Value | Description |
+|-------|-------------|
+| `PRE_EVENT` | Tasks before the event |
+| `ON_DAY` | Tasks on event day |
+| `POST_EVENT` | Tasks after the event |
+
+### AuditAction
+| Value | Description |
+|-------|-------------|
+| `CREATE` | New entity created |
+| `UPDATE` | Entity modified |
+| `DELETE` | Entity removed |
+
+### EmailStatus
+| Value | Description |
+|-------|-------------|
+| `PENDING` | Queued for sending |
+| `SENT` | Successfully delivered |
+| `FAILED` | Delivery failed |
+
+### Entity Types (for Audit Log)
+- `Event`
+- `Speaker`
+- `Volunteer`
+- `SOPTask`
+- `SOPTemplate`
+- `EventSpeaker`
+- `EventVolunteer`
+- `User`
+- `AppSetting`
+- `VenuePartner`
+
+---
+
+## Data Models Quick Reference
+
+### Event
+```typescript
+{
+  id: string;
+  title: string;
+  description?: string;
+  date: Date;           // Event start
+  endDate: Date;        // Event end
+  venue?: string;       // Simple venue name
+  pageLink?: string;    // External event page
+  status: EventStatus;
+  createdById: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Speaker
+```typescript
+{
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  topic?: string;
+  photoUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Volunteer
+```typescript
+{
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  discordId?: string;
+  role?: string;        // General role/description
+  userId?: string;      // Linked user account
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### VenuePartner
+```typescript
+{
+  id: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  capacity?: number;
+  notes?: string;
+  website?: string;
+  photoUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### SOPTask
+```typescript
+{
+  id: string;
+  checklistId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: Priority;
+  ownerId?: string;           // User who created
+  assigneeId?: string;        // Assigned user
+  volunteerAssigneeId?: string; // Assigned volunteer
+  deadline?: Date;
+  completedAt?: Date;
+  blockedReason?: string;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+---
+
+## Common Query Patterns
+
+### Filter Events
+```javascript
+// Upcoming events (default)
+GET /api/events?filter=upcoming
+
+// Past events
+GET /api/events?filter=past
+
+// All events
+GET /api/events?filter=all
+```
+
+### Paginated Audit Logs
+```javascript
+// Page 1, 50 items (default)
+GET /api/audit-log
+
+// Page 2, 25 items
+GET /api/audit-log?page=2&limit=25
+
+// Filter by entity type
+GET /api/audit-log?entityType=Event
+
+// Combined
+GET /api/audit-log?entityType=Task&page=1&limit=100
+```
+
+### Email Logs
+```javascript
+// By template
+GET /api/email/log?template=task-assigned
+
+// By status
+GET /api/email/log?status=FAILED
+
+// Combined with pagination
+GET /api/email/log?template=event-created&status=SENT&page=1&limit=50
+```
+
+---
+
+## Date Handling
+
+All dates are in **ISO 8601 format** (UTC):
+```
+2026-04-15T18:00:00.000Z
+```
+
+When creating events or tasks, always include the timezone offset or use UTC:
+```javascript
+// JavaScript
+new Date().toISOString();  // "2026-03-16T11:30:00.000Z"
+
+// Relative dates (e.g., 7 days from now)
+new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+```
+
+---
+
+## File Uploads
+
+### Logo Upload
+```http
+POST /api/settings/logo
+Content-Type: multipart/form-data
+
+file: <binary data>
+variant: light|dark
+```
+
+**Supported formats:** PNG, JPEG, SVG, WebP  
+**Max size:** 200KB
+
+---
+
+## Tips for AI Agents
+
+### 1. Check Before Creating
+Always check if an entity exists before creating to avoid duplicates:
+```javascript
+// Check if speaker exists
+const existing = await fetch(`/api/speakers`).then(r => r.json());
+const found = existing.find(s => s.email === "speaker@example.com");
+
+if (found) {
+  // Link existing speaker to event
+  await linkSpeakerToEvent(found.id);
+} else {
+  // Create new speaker
+  const created = await createSpeaker({ email: "speaker@example.com", ... });
+  await linkSpeakerToEvent(created.id);
+}
+```
+
+### 2. Handle Soft Deletes
+Users are soft-deleted. Check for `deletedAt` field:
+```javascript
+// When listing members, check if active
+const activeMembers = members.filter(m => !m.deletedAt);
+```
+
+### 3. Cascade Considerations
+- Deleting an Event → cascades to EventSpeaker, EventVolunteer, EventVenuePartner, SOPChecklist, SOPTask
+- Deleting a Speaker → cascades to EventSpeaker links
+- Deleting a Volunteer → cascades to EventVolunteer links and task assignments
+- Deleting a VenuePartner → cascades to EventVenuePartner links
+
+### 4. Audit Logging
+All create/update/delete operations are automatically audit-logged. No need to log separately.
+
+### 5. Email Sending
+Emails are sent fire-and-forget. The API will return 200 immediately, and emails are processed asynchronously. Check `EmailLog` for delivery status.
+
+### 6. Discord Notifications
+Discord notifications silently fail if not configured. No error is returned to the API caller.
+
+---
+
+## Changelog
+
+### Skill Version 1.0
+- Initial complete API documentation
+- All REST endpoints documented
+- Authentication patterns for AI agents
+- Role-based access control reference
+- Common workflow examples
+- SDK helper patterns
+- Enums & constants reference
+
