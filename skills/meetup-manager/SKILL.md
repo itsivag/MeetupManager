@@ -28,6 +28,8 @@ http://localhost:3000/api
 > **⚠️ CRITICAL: You MUST obtain a session token before making ANY API calls.**
 > 
 > All API endpoints (except login) require authentication. Without a valid session token or cookie, you will receive `401 Unauthorized` errors.
+> 
+> **Session Duration:** Session tokens are valid for **7 days** (604800 seconds). After expiration, you must obtain a new session key.
 
 Meetup Manager supports **dual authentication** - Google OAuth for web users and token-based auth for programmatic/API access.
 
@@ -92,6 +94,8 @@ Authorization: Bearer <session-cookie-value>
 
 **Example cookie name:** `authjs.session-token`  
 **Example cookie value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+**Session Duration:** 7 days (expires automatically after 604800 seconds)
 
 > **Note:** The cookie value is a valid JWT token. Pass it directly as the Bearer token - no conversion needed.
 
@@ -1348,7 +1352,7 @@ return dashboard.myTasks.map(t =>
 
 | Scenario | Agent Response |
 |----------|----------------|
-| `401 Unauthorized` | "I need your session key to access Meetup Manager. Please provide your session cookie (authjs.session-token) from the browser, or sign in first." |
+| `401 Unauthorized` | "I need your session key to access Meetup Manager. Please provide your session cookie (authjs.session-token) from the browser, or sign in first. Note: Sessions expire after 7 days." |
 | `403 Forbidden` | "You don't have permission to do this. Your role is X, but you need Y." |
 | `409 Conflict` | "There's a conflict - perhaps this email already exists or there's a duplicate entry." |
 | User not registered | "You need to sign into Meetup Manager via Google first before I can access the API on your behalf." |
