@@ -120,6 +120,8 @@ For browser-based clients, Google OAuth sets session cookies automatically. No a
 
 ## Role-Based Access Control
 
+> **UI Reference:** Visit `/settings/permissions` in the Meetup Manager dashboard for a visual permission matrix and detailed role descriptions.
+
 ### Global Roles (Hierarchy)
 | Role | Level | Capabilities |
 |------|-------|--------------|
@@ -136,6 +138,30 @@ For browser-based clients, Google OAuth sets session cookies automatically. No a
 | `VOLUNTEER` | 1 | Read event data |
 | `ORGANIZER` | 2 | Create/update within event |
 | `LEAD` | 3 | Full event control including delete |
+
+### Permission Matrix Reference
+
+For a complete visual permission matrix showing which roles can access which features, visit:
+```
+https://your-domain.com/settings/permissions
+```
+
+The matrix includes:
+- Dashboard access levels (full/limited/none)
+- Event management permissions
+- Speaker/Volunteer/Venue management
+- SOP Tasks and Templates
+- Member management
+- Audit logs, Email, Discord integrations
+- App Settings access
+
+### Key Rules
+
+1. **Admins and Super Admins bypass all event-level role checks** — they have full access to every event
+2. **Only Super Admins can assign the Admin role, delete members, or change app-wide settings**
+3. **Admins cannot modify other Admins** — role changes between Admins require Super Admin
+4. **Volunteers can only see events they're assigned to**, and can only manage their own tasks
+5. **Member deletion is a soft-delete** — account is deactivated but data is preserved; owned entities must be reassigned first
 
 ## Core Resources
 
@@ -868,6 +894,8 @@ Sends a test message to verify bot connectivity.
 ---
 
 ### Email System
+
+> **UI Reference:** Visit `/settings/permissions/email-workflows` for a visual reference of all automated email workflows with triggers, recipients, and timing.
 
 #### Send Test Email
 ```http
