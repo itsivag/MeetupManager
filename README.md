@@ -409,17 +409,17 @@ Meetup Manager can be controlled programmatically by AI agents via its REST API.
 
 **Install via Skills CLI:**
 ```bash
-npx skills add itsivag/MeetupManager@meetup-manager
+npx skills add kugchennai/MeetupManager@meetup-manager
 ```
 
 **Or reference directly:**
 ```
-github:itsivag/MeetupManager/meetup-skills/skills/meetup-manager
+github:kugchennai/MeetupManager/main/skills/meetup-manager
 ```
 
 **Raw skill URL:**
 ```
-https://raw.githubusercontent.com/itsivag/MeetupManager/meetup-skills/skills/meetup-manager/SKILL.md
+https://raw.githubusercontent.com/kugchennai/MeetupManager/main/skills/meetup-manager/SKILL.md
 ```
 
 ### Quick Agent Setup
