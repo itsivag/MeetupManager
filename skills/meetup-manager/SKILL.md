@@ -25,6 +25,10 @@ http://localhost:3000/api
 
 ## Authentication
 
+> **⚠️ CRITICAL: You MUST obtain a session token before making ANY API calls.**
+> 
+> All API endpoints (except login) require authentication. Without a valid session token or cookie, you will receive `401 Unauthorized` errors.
+
 Meetup Manager supports **dual authentication** - Google OAuth for web users and token-based auth for programmatic/API access.
 
 ### For AI Agents: Getting an Access Token
@@ -70,20 +74,26 @@ Use the access token in all subsequent requests:
 Authorization: Bearer eyJ...
 ```
 
-#### Option 2: Extract Cookie from Browser
+#### Option 2: Session Cookie (Browser-based)
 
-If you've signed in via Google OAuth in a browser:
+This is the **most common method** when the user is already signed in via browser:
 
 1. Open browser DevTools (F12)
-2. Go to Application/Storage → Cookies
-3. Find `authjs.session-token` (or `__Secure-authjs.session-token` in production)
-4. Use this cookie value as your Bearer token:
+2. Go to Application/Storage → Cookies → `localhost` (or your domain)
+3. Find the session cookie:
+   - **Development:** `authjs.session-token`
+   - **Production:** `__Secure-authjs.session-token`
+4. Copy the cookie value - this IS your session key
+5. Use it as a Bearer token in API calls:
 
 ```http
-Authorization: Bearer <cookie-value>
+Authorization: Bearer <session-cookie-value>
 ```
 
-> The cookie value IS a valid JWT token that can be used directly.
+**Example cookie name:** `authjs.session-token`  
+**Example cookie value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+> **Note:** The cookie value is a valid JWT token. Pass it directly as the Bearer token - no conversion needed.
 
 #### Option 3: User Provides Token
 
@@ -172,6 +182,11 @@ For browser-based clients, Google OAuth sets session cookies automatically. No a
 6. **Event Leads can view SOP templates** but only Admins+ can create, edit, or delete them
 
 ## Core Resources
+
+> **Remember:** All API calls below require the session key in the Authorization header:
+> ```http
+> Authorization: Bearer {your-session-key}
+> ```
 
 ### Events
 
@@ -1204,23 +1219,23 @@ const checkPermission = async (userId: string, eventId: string, action: string) 
 
 ### Step-by-Step: First-Time Setup
 
-Since Meetup Manager uses Google OAuth, follow this workflow to get API access:
+Since Meetup Manager uses session-based authentication, follow this workflow:
 
-**Step 1: User Must Pre-Register**
+**Step 1: Obtain Session Key (REQUIRED)**
+
+Before ANY API calls, you MUST get a session token. Choose ONE method:
+
+**Method A: Extract from Browser (Easiest)**
 ```
-Agent: "To use Meetup Manager API, your email needs to be registered. 
-Have you signed into the Meetup Manager dashboard via Google OAuth before?"
+Agent: "I need your session cookie to access the Meetup Manager API.
+Please:
+1. Open Meetup Manager in your browser (sign in if needed)
+2. Press F12 → Application → Cookies
+3. Find 'authjs.session-token'
+4. Copy the value and paste it here"
 ```
 
-If **NO**: The user must:
-1. Visit the Meetup Manager web UI
-2. Sign in with Google OAuth once
-3. This creates their account in the system
-4. Then return to the agent
-
-If **YES**: Proceed to Step 2
-
-**Step 2: Get Access Token**
+**Method B: Token Endpoint (If user pre-registered)**
 ```http
 POST /api/auth/token
 Content-Type: application/json
@@ -1229,17 +1244,20 @@ Content-Type: application/json
   "email": "user@example.com"
 }
 ```
+> Note: Email must already exist in the system (user signed in via OAuth before)
 
-**Step 3: Store Token Securely**
-- Keep the `accessToken` for API calls
-- Keep the `refreshToken` for renewal
-- Token expires in 7 days
+**Step 2: Store Session Key**
+```javascript
+const sessionKey = "eyJhbGciOiJIUzI1NiIs..."; // From user
+```
 
-**Step 4: Make API Calls**
+**Step 3: Use in ALL API Calls**
 ```http
 GET /api/events
-Authorization: Bearer {accessToken}
+Authorization: Bearer {sessionKey}
 ```
+
+**⚠️ REMINDER: Every API request must include the Authorization header with your session key.**
 
 ### Handling Token Expiration
 
@@ -1330,10 +1348,15 @@ return dashboard.myTasks.map(t =>
 
 | Scenario | Agent Response |
 |----------|----------------|
-| `401 Unauthorized` | "Your session has expired. Please provide a fresh token or sign in again." |
+| `401 Unauthorized` | "I need your session key to access Meetup Manager. Please provide your session cookie (authjs.session-token) from the browser, or sign in first." |
 | `403 Forbidden` | "You don't have permission to do this. Your role is X, but you need Y." |
 | `409 Conflict` | "There's a conflict - perhaps this email already exists or there's a duplicate entry." |
 | User not registered | "You need to sign into Meetup Manager via Google first before I can access the API on your behalf." |
+
+**If you get 401 on EVERY request:** You forgot to include the Authorization header. Make sure EVERY API call includes:
+```http
+Authorization: Bearer {session-key}
+```
 
 ### Security Notes for Agents
 
